@@ -1,5 +1,5 @@
-const fs = require("fs");
 const { exec } = require("child_process");
+const fs = require("fs");
 
 const IS_PROD = process.platform === "linux";
 
@@ -7,41 +7,61 @@ const PASSWD_FILE = "/etc/mosquitto/passwd";
 const ACL_FILE = "/etc/mosquitto/acl/aclfile";
 
 /**
- * Add or update MQTT user password
+ * =========================
+ * ADD / UPDATE MQTT USER
+ * =========================
  */
 exports.addMqttUser = (username, password) => {
   if (!IS_PROD) {
-    console.log("[DEV] Skipping mosquitto_passwd");
+    console.log("[DEV] Skipping mosquitto_passwd add");
     return;
   }
 
   exec(
-    `mosquitto_passwd -b ${PASSWD_FILE} ${username} ${password}`,
+    `sudo mosquitto_passwd -b ${PASSWD_FILE} ${username} ${password}`,
     (err) => {
-      if (err) console.error("MQTT user add failed", err.message);
+      if (err) {
+        console.error("❌ MQTT user add failed:", err.message);
+      } else {
+        console.log("✅ MQTT user added:", username);
+      }
     }
   );
 };
 
 /**
- * Remove MQTT user
+ * =========================
+ * REMOVE MQTT USER
+ * =========================
  */
 exports.removeMqttUser = (username) => {
-  if (!IS_PROD) return;
+  if (!IS_PROD) {
+    console.log("[DEV] Skipping mosquitto_passwd delete");
+    return;
+  }
 
   exec(
-    `mosquitto_passwd -D ${PASSWD_FILE} ${username}`,
+    `sudo mosquitto_passwd -D ${PASSWD_FILE} ${username}`,
     (err) => {
-      if (err) console.error("MQTT user delete failed", err.message);
+      if (err) {
+        console.error("❌ MQTT user delete failed:", err.message);
+      } else {
+        console.log("✅ MQTT user removed:", username);
+      }
     }
   );
 };
 
 /**
- * Add device ACL
+ * =========================
+ * ADD DEVICE ACL
+ * =========================
  */
 exports.addDeviceAcl = (deviceId) => {
-  if (!IS_PROD) return;
+  if (!IS_PROD) {
+    console.log("[DEV] Skipping ACL add");
+    return;
+  }
 
   const aclBlock = `
 # DEVICE ${deviceId}
@@ -53,29 +73,56 @@ topic read  devices/${deviceId}/command
 topic read  devices/${deviceId}/ota
 `;
 
-  fs.appendFileSync(ACL_FILE, aclBlock);
-  exports.reloadMosquitto();
+  exec(
+    `echo "${aclBlock.replace(/"/g, '\\"')}" | sudo tee -a ${ACL_FILE}`,
+    (err) => {
+      if (err) {
+        console.error("❌ ACL write failed:", err.message);
+        return;
+      }
+      console.log("✅ ACL added for device:", deviceId);
+      exports.reloadMosquitto();
+    }
+  );
 };
 
 /**
- * Remove device ACL
+ * =========================
+ * REMOVE DEVICE ACL
+ * =========================
  */
 exports.removeDeviceAcl = (deviceId) => {
-  if (!IS_PROD) return;
+  if (!IS_PROD) {
+    console.log("[DEV] Skipping ACL remove");
+    return;
+  }
 
-  let acl = fs.readFileSync(ACL_FILE, "utf8");
-  const regex = new RegExp(`# DEVICE ${deviceId}[\\s\\S]*?ota\\n`, "g");
-  acl = acl.replace(regex, "");
-  fs.writeFileSync(ACL_FILE, acl);
-
-  exports.reloadMosquitto();
+  exec(
+    `sudo sed -i '/# DEVICE ${deviceId}/,/topic read  devices\\/${deviceId}\\/ota/d' ${ACL_FILE}`,
+    (err) => {
+      if (err) {
+        console.error("❌ ACL remove failed:", err.message);
+        return;
+      }
+      console.log("✅ ACL removed for device:", deviceId);
+      exports.reloadMosquitto();
+    }
+  );
 };
 
 /**
- * Reload Mosquitto ACL
+ * =========================
+ * RELOAD MOSQUITTO
+ * =========================
  */
 exports.reloadMosquitto = () => {
-  exec("systemctl reload mosquitto", (err) => {
-    if (err) console.error("Mosquitto reload failed", err.message);
+  if (!IS_PROD) return;
+
+  exec("sudo systemctl reload mosquitto", (err) => {
+    if (err) {
+      console.error("❌ Mosquitto reload failed:", err.message);
+    } else {
+      console.log("🔄 Mosquitto reloaded");
+    }
   });
 };
