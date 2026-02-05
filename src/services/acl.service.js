@@ -5,6 +5,8 @@ const IS_PROD = process.platform === "linux";
 
 const PASSWD_FILE = "/etc/mosquitto/passwd";
 const ACL_FILE = "/etc/mosquitto/acl/aclfile";
+console.log("IS_PROD =", IS_PROD, "platform =", process.platform);
+
 
 /**
  * =========================
