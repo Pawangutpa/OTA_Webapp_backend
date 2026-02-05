@@ -1,42 +1,64 @@
 const Device = require("../models/device.model");
 const Activity = require("../models/activity.model");
+const aclService = require("../services/acl.service");
+
 
 /**
  * Register a new device
  * One device can belong to only one user
  */
 exports.registerDevice = async (req, res) => {
-  const { deviceId, name } = req.body;
+  try {
+    const { deviceId, name } = req.body;
 
-  // Normalize device ID (MAC without colon)
-  const normalizedId = deviceId.toUpperCase();
+    const normalizedId = deviceId.toUpperCase();
 
-  const existing = await Device.findOne({ deviceId: normalizedId });
-  if (existing) {
-    return res.status(400).json({ message: "Device already registered" });
+    const existing = await Device.findOne({ deviceId: normalizedId });
+    if (existing) {
+      return res.status(400).json({ message: "Device already registered" });
+    }
+
+    // 1️⃣ Create device in DB
+    const device = await Device.create({
+      deviceId: normalizedId,
+      name,
+      owner: req.user.id,
+      firmwareVersion: "1.0.0",
+      online: false,
+      otaStatus: "IDLE",
+      blocked: false
+    });
+
+    // 2️⃣ CREATE MQTT USER
+    aclService.addMqttUser(
+      `esp32_${normalizedId}`,
+      normalizedId
+    );
+
+    // 3️⃣ ADD DEVICE ACL
+    aclService.addDeviceAcl(normalizedId);
+
+    // 4️⃣ Log activity
+    await Activity.create({
+      userId: req.user.id,
+      deviceId: normalizedId,
+      action: "DEVICE_REGISTERED",
+      ip: req.ip
+    });
+
+    console.log("✅ Device registered + MQTT + ACL:", normalizedId);
+
+    res.status(201).json({
+      message: "Device registered successfully",
+      device
+    });
+
+  } catch (err) {
+    console.error("❌ Device registration failed:", err);
+    res.status(500).json({ message: "Device registration failed" });
   }
-
-  const device = await Device.create({
-    deviceId: normalizedId,
-    name,
-    owner: req.user.id,
-    firmwareVersion: "1.0.0",
-    online: false,
-    otaStatus: "IDLE"
-  });
-
-  await Activity.create({
-    userId: req.user.id,
-    deviceId: normalizedId,
-    action: "DEVICE_REGISTERED",
-    ip: req.ip
-  });
-
-  res.status(201).json({
-    message: "Device registered successfully",
-    device
-  });
 };
+
 
 /**
  * Get all devices of logged-in user
