@@ -1,6 +1,6 @@
 const Device = require("../models/device.model");
 
-const OFFLINE_THRESHOLD_MS = 30 * 1000; // 30 seconds
+const OFFLINE_THRESHOLD_MS = 60 * 1000; // 30 seconds
 
 /**
  * Marks devices offline if no heartbeat received
