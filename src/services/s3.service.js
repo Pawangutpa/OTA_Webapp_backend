@@ -22,3 +22,16 @@ exports.getSignedFirmwareUrl = async () => {
     Expires: 300   // 5 minutes
   });
 };
+
+exports.getBlockedVersions = async () => {
+  try {
+    const data = await s3.getObject({
+      Bucket: process.env.S3_BUCKET,
+      Key: "esp32s3/rollback/blocked_versions.json"
+    }).promise();
+
+    return JSON.parse(data.Body.toString()).blocked_versions || [];
+  } catch {
+    return [];
+  }
+};

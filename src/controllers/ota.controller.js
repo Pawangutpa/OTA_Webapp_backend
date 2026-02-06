@@ -6,7 +6,7 @@ const { checkUpdate, startOta } = require("../services/ota.service");
  */
 exports.checkOta = async (req, res) => {
   const device = await Device.findOne({
-    deviceId: req.params.deviceId,
+    deviceId: req.params.deviceId.toUpperCase(),
     owner: req.user.id
   });
 
@@ -15,8 +15,24 @@ exports.checkOta = async (req, res) => {
   }
 
   const result = await checkUpdate(device);
-  res.json(result);
+
+  if (!result.updateAvailable) {
+    return res.json({
+      updateAvailable: false,
+      message: "Firmware is up to date",
+      currentVersion: device.firmwareVersion
+    });
+  }
+
+  res.json({
+    updateAvailable: true,
+    message: `Update available: ${result.latestVersion}`,
+    latestVersion: result.latestVersion,
+    currentVersion: device.firmwareVersion
+  });
 };
+
+
 
 /**
  * POST /api/ota/:deviceId/start
