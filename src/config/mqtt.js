@@ -163,6 +163,7 @@ client.on("message", async (topic, message) => {
      * - FAILED
      */
     if (subTopic === "ota/status") {
+      device.online = true;
       device.lastSeen = new Date();
       device.otaStatus = payloadStr;
 
