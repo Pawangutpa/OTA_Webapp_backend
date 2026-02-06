@@ -2,7 +2,47 @@ const Device = require("../models/device.model");
 const Activity = require("../models/activity.model");
 const aclService = require("../services/acl.service");
 
+/**
+ * Set LED state (ON / OFF)
+ * POST /api/device/:deviceId/led
+ */
+exports.setLed = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { state } = req.body; // "ON" or "OFF"
 
+    if (!["ON", "OFF"].includes(state)) {
+      return res.status(400).json({ message: "Invalid LED state" });
+    }
+
+    const device = await Device.findOne({
+      deviceId: deviceId.toUpperCase(),
+      owner: req.user.id
+    });
+
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" });
+    }
+
+    if (!device.online) {
+      return res.status(400).json({ message: "Device is offline" });
+    }
+
+    mqtt.publish(
+      `devices/${device.deviceId}/command`,
+      state === "ON" ? "LED_ON" : "LED_OFF"
+    );
+
+    res.json({
+      message: "LED command sent",
+      state
+    });
+
+  } catch (err) {
+    console.error("LED control error:", err.message);
+    res.status(500).json({ message: "LED control failed" });
+  }
+};
 /**
  * Register a new device
  * One device can belong to only one user
