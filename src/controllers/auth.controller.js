@@ -1,64 +1,135 @@
+/**
+ * Authentication Controller
+ * -------------------------
+ * Handles user registration and login.
+ */
+
+"use strict";
+
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user.model");
 
-/**
- * Register new user
- */
-exports.register = async (req, res) => {
-  const { username, email, password } = req.body;
+const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 10);
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
-  // Check if user already exists
-  const exists = await User.findOne({ $or: [{ email }, { username }] });
-  if (exists) {
-    return res.status(400).json({ message: "User already exists" });
+/* =========================
+   Register New User
+   ========================= */
+async function register(req, res, next) {
+  try {
+    const { username, email, password } = req.body;
+
+    // Basic input validation
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Username, email and password are required",
+      });
+    }
+
+    // Check if user already exists
+    const exists = await User.findOne({
+      $or: [{ email }, { username }],
+    }).lean();
+
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        message: "User already exists",
+      });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const user = await User.create({
+      username,
+      email,
+      passwordHash,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      userId: user._id,
+    });
+  } catch (error) {
+    next(error); // forward to global error handler
   }
+}
 
-  const passwordHash = await bcrypt.hash(password, 10);
+/* =========================
+   Login User
+   ========================= */
+async function login(req, res, next) {
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.create({
-    username,
-    email,
-    passwordHash
-  });
+    // Basic input validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
 
-  res.status(201).json({
-    message: "User registered successfully",
-    userId: user._id
-  });
-};
+    const user = await User.findOne({ email });
 
-/**
- * Login user
- */
-exports.login = async (req, res) => {
-  const { email, password } = req.body;
+    // Avoid user enumeration
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
 
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
+    if (user.blocked) {
+      return res.status(403).json({
+        success: false,
+        message: "User is blocked",
+      });
+    }
+
+    const validPassword = await bcrypt.compare(
+      password,
+      user.passwordHash
+    );
+
+    if (!validPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    // Update last login timestamp
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Issue JWT
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: JWT_EXPIRES_IN,
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Login successful",
+      token,
+    });
+  } catch (error) {
+    next(error);
   }
+}
 
-  if (user.blocked) {
-    return res.status(403).json({ message: "User is blocked" });
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
-
-  user.lastLogin = new Date();
-  await user.save();
-
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "24h" }
-  );
-
-  res.json({
-    message: "Login successful",
-    token
-  });
+module.exports = {
+  register,
+  login,
 };

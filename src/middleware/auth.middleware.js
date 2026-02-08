@@ -1,11 +1,57 @@
+/**
+ * Authentication Middleware
+ * -------------------------
+ * Verifies JWT access token and attaches user payload to request.
+ */
+
+"use strict";
+
 const jwt = require("jsonwebtoken");
 
-module.exports = (req, res, next) => {
+/**
+ * Protects routes by validating JWT token.
+ */
+function authMiddleware(req, res, next) {
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    const authHeader = req.headers.authorization;
+
+    // Header must exist
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        message: "Authorization header missing",
+      });
+    }
+
+    // Format: Bearer <token>
+    const [scheme, token] = authHeader.split(" ");
+
+    if (scheme !== "Bearer" || !token) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authorization format",
+      });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Attach user info to request object
+    req.user = decoded;
+
     next();
-  } catch {
-    res.status(401).json({ message: "Unauthorized" });
+  } catch (error) {
+    // Handle token-specific errors
+    const message =
+      error.name === "TokenExpiredError"
+        ? "Token expired"
+        : "Unauthorized";
+
+    return res.status(401).json({
+      success: false,
+      message,
+    });
   }
-};
+}
+
+module.exports = authMiddleware;

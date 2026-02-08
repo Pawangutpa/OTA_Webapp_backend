@@ -55,39 +55,3 @@ exports.startOta = async (device) => {
   return { firmwareUrl };
 };
 
-//block ota
-
-
-exports.startOta = async (device) => {
-  if (!device.online) {
-    throw new Error("Device offline");
-  }
-
-  if (device.otaStatus === "IN_PROGRESS") {
-    throw new Error("OTA already running");
-  }
-
-  const latestVersion = await getProductionVersion();
-  const blocked = await getBlockedVersions();
-
-  if (blocked.includes(latestVersion)) {
-    throw new Error("Update blocked by admin");
-  }
-
-  const firmwareUrl = await getSignedFirmwareUrl();
-
-  device.otaStatus = "IN_PROGRESS";
-  device.targetVersion = latestVersion;
-  await device.save();
-
-  await OTA.create({
-    deviceId: device.deviceId,
-    fromVersion: device.firmwareVersion,
-    toVersion: latestVersion,
-    status: "STARTED"
-  });
-
-  mqtt.publish(`devices/${device.deviceId}/ota`, firmwareUrl);
-
-  return { firmwareUrl };
-};

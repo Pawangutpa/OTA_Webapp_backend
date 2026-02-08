@@ -1,79 +1,129 @@
+/**
+ * OTA Controller
+ * --------------
+ * Handles firmware update lifecycle for devices.
+ */
+
+"use strict";
+
 const Device = require("../models/device.model");
 const { checkUpdate, startOta } = require("../services/ota.service");
 
+/* =========================
+   OTA CHECK
+   ========================= */
+
 /**
+ * Check if OTA update is available
  * GET /api/ota/:deviceId/check
  */
-exports.checkOta = async (req, res) => {
+async function checkOta(req, res, next) {
   try {
-    
+    const deviceId = req.params.deviceId?.trim().toUpperCase();
 
-    // ✅ DEFINE deviceId PROPERLY
-    const deviceId = req.params.deviceId.trim().toUpperCase();
-
-   
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deviceId",
+      });
+    }
 
     const device = await Device.findOne({
-      deviceId: deviceId,
-      owner: req.user.id
+      deviceId,
+      owner: req.user.id,
     });
 
-    
-
     if (!device) {
-      return res.status(404).json({ message: "Device not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Device not found",
+      });
     }
 
     const result = await checkUpdate(device);
 
     if (!result.updateAvailable) {
       return res.json({
+        success: true,
         updateAvailable: false,
         message: "Firmware is up to date",
-        currentVersion: device.firmwareVersion
+        currentVersion: device.firmwareVersion,
       });
     }
 
     return res.json({
+      success: true,
       updateAvailable: true,
       message: `Update available: ${result.latestVersion}`,
       latestVersion: result.latestVersion,
-      currentVersion: device.firmwareVersion
+      currentVersion: device.firmwareVersion,
     });
-
-  } catch (err) {
-    console.error("❌ OTA check error:", err);
-    res.status(500).json({ message: "OTA check failed" });
+  } catch (error) {
+    console.error("[OTA] Check failed:", error);
+    next(error);
   }
-};
+}
 
-
-
+/* =========================
+   OTA START
+   ========================= */
 
 /**
+ * Start OTA update
  * POST /api/ota/:deviceId/start
  */
-exports.startOta = async (req, res) => {
+async function startOtaController(req, res, next) {
   try {
-    const deviceId = req.params.deviceId.trim().toUpperCase();
+    const deviceId = req.params.deviceId?.trim().toUpperCase();
 
-   
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deviceId",
+      });
+    }
 
     const device = await Device.findOne({
-      deviceId: deviceId,
-      owner: req.user.id
+      deviceId,
+      owner: req.user.id,
     });
 
     if (!device) {
-      return res.status(404).json({ message: "Device not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Device not found",
+      });
+    }
+
+    // Optional safety checks (recommended)
+    if (!device.online) {
+      return res.status(400).json({
+        success: false,
+        message: "Device is offline",
+      });
+    }
+
+    if (device.otaStatus === "IN_PROGRESS") {
+      return res.status(409).json({
+        success: false,
+        message: "OTA already in progress",
+      });
     }
 
     const result = await startOta(device);
-    res.json({ message: "OTA started", ...result });
 
-  } catch (err) {
-    console.error("❌ OTA start error:", err.message);
-    res.status(400).json({ message: err.message });
+    return res.json({
+      success: true,
+      message: "OTA started",
+      ...result,
+    });
+  } catch (error) {
+    console.error("[OTA] Start failed:", error);
+    next(error);
   }
-};
+}
 
+module.exports = {
+  checkOta,
+  startOta: startOtaController,
+};

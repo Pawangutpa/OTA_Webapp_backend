@@ -30,9 +30,9 @@ const missingVars = REQUIRED_ENV_VARS.filter(
  * This prevents the app from running in a broken state
  */
 if (missingVars.length > 0) {
-  console.error("❌ [ENV] Missing required environment variables:");
+  console.error("[ENV] Missing required environment variables:");
   missingVars.forEach((key) => console.error(`   - ${key}`));
   process.exit(1);
 }
 
-console.log("✅ [ENV] All required environment variables loaded");
+console.log("[ENV] All required environment variables loaded");

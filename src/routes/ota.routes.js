@@ -1,8 +1,33 @@
-const router = require("express").Router();
-const auth = require("../middleware/auth.middleware");
-const controller = require("../controllers/ota.controller");
+/**
+ * OTA Routes
+ * ----------
+ * Handles Over-The-Air firmware update operations:
+ *  - Check if firmware update is available
+ *  - Start OTA update process
+ */
 
-router.get("/:deviceId/check", auth, controller.checkOta);
-router.post("/:deviceId/start", auth, controller.startOta);
+"use strict";
+
+const express = require("express");
+const router = express.Router();
+
+const authMiddleware = require("../middleware/auth.middleware");
+const otaController = require("../controllers/ota.controller");
+
+/* =========================
+   OTA Endpoints
+   ========================= */
+
+/**
+ * Check OTA update availability
+ * GET /api/ota/:deviceId/check
+ */
+router.get("/:deviceId/check", authMiddleware, otaController.checkOta);
+
+/**
+ * Start OTA update
+ * POST /api/ota/:deviceId/start
+ */
+router.post("/:deviceId/start", authMiddleware, otaController.startOta);
 
 module.exports = router;
