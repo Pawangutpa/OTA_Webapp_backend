@@ -74,7 +74,8 @@ async function login(req, res, next) {
       });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+passwordHash");
+
 
     // Avoid user enumeration
     if (!user) {
