@@ -11,13 +11,11 @@
 "use strict";
 
 const { execFile } = require("child_process");
-const fs = require("fs");
 
 /* =========================
-   ENV FLAG (NEW)
+   ENV FLAG
    ========================= */
 
-// Dedicated flag instead of NODE_ENV
 const ACL_ENABLED = process.env.ACL_ENABLED === "true";
 
 const PASSWD_FILE = "/etc/mosquitto/passwd";
@@ -32,12 +30,6 @@ console.log("[ACL] ENABLED =", ACL_ENABLED);
 function validateIdentifier(value, label) {
   if (!/^[A-Z0-9_-]+$/i.test(value)) {
     throw new Error(`Invalid ${label}: ${value}`);
-  }
-}
-
-function fileExistsOrThrow(filePath) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Required file not found: ${filePath}`);
   }
 }
 
@@ -63,7 +55,6 @@ async function addMqttUser(username, password) {
   }
 
   validateIdentifier(username, "username");
-  fileExistsOrThrow(PASSWD_FILE);
 
   await execSafe("sudo", [
     "mosquitto_passwd",
@@ -83,7 +74,6 @@ async function removeMqttUser(username) {
   }
 
   validateIdentifier(username, "username");
-  fileExistsOrThrow(PASSWD_FILE);
 
   await execSafe("sudo", [
     "mosquitto_passwd",
@@ -118,11 +108,16 @@ async function addDeviceAcl(deviceId) {
   }
 
   validateIdentifier(deviceId, "deviceId");
-  fileExistsOrThrow(ACL_FILE);
 
-  const aclBlock = buildDeviceAcl(deviceId);
+  const aclBlock = buildDeviceAcl(deviceId)
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$");
 
-  fs.appendFileSync(ACL_FILE, aclBlock);
+  await execSafe("sudo", [
+    "bash",
+    "-c",
+    `echo "${aclBlock}" >> ${ACL_FILE}`,
+  ]);
 
   console.log("[ACL] Device ACL added:", deviceId);
 
@@ -136,7 +131,6 @@ async function removeDeviceAcl(deviceId) {
   }
 
   validateIdentifier(deviceId, "deviceId");
-  fileExistsOrThrow(ACL_FILE);
 
   const sedExpr = `/# DEVICE ${deviceId}/,/topic read  devices\\/${deviceId}\\/ota/d`;
 
