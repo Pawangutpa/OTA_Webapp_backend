@@ -1,6 +1,6 @@
 /**
  * Mosquitto ACL & User Management Service
- * --------------------------------------
+ * ---------------------------------------
  * Handles MQTT users and ACL rules for devices.
  *
  * ⚠️ SECURITY CRITICAL:
@@ -12,19 +12,18 @@
 
 const { execFile } = require("child_process");
 const fs = require("fs");
-const path = require("path");
 
 /* =========================
-   ENV & PLATFORM CHECK
+   ENV FLAG (NEW)
    ========================= */
 
-// Explicit prod flag is safer than OS check
-const IS_PROD = process.env.NODE_ENV === "production";
+// Dedicated flag instead of NODE_ENV
+const ACL_ENABLED = process.env.ACL_ENABLED === "true";
 
 const PASSWD_FILE = "/etc/mosquitto/passwd";
 const ACL_FILE = "/etc/mosquitto/acl/aclfile";
 
-console.log("[ACL] PROD =", IS_PROD, "NODE_ENV =", process.env.NODE_ENV);
+console.log("[ACL] ENABLED =", ACL_ENABLED);
 
 /* =========================
    UTILS
@@ -57,12 +56,9 @@ function execSafe(command, args = []) {
    MQTT USER MANAGEMENT
    ========================= */
 
-/**
- * Add or update MQTT user
- */
 async function addMqttUser(username, password) {
-  if (!IS_PROD) {
-    console.log("[ACL][DEV] Skipping MQTT user add");
+  if (!ACL_ENABLED) {
+    console.log("[ACL] Skipped (ACL_ENABLED=false)");
     return;
   }
 
@@ -80,19 +76,21 @@ async function addMqttUser(username, password) {
   console.log("[ACL] MQTT user added:", username);
 }
 
-/**
- * Remove MQTT user
- */
 async function removeMqttUser(username) {
-  if (!IS_PROD) {
-    console.log("[ACL][DEV] Skipping MQTT user removal");
+  if (!ACL_ENABLED) {
+    console.log("[ACL] Skipped (ACL_ENABLED=false)");
     return;
   }
 
   validateIdentifier(username, "username");
   fileExistsOrThrow(PASSWD_FILE);
 
-  await execSafe("sudo", ["mosquitto_passwd", "-D", PASSWD_FILE, username]);
+  await execSafe("sudo", [
+    "mosquitto_passwd",
+    "-D",
+    PASSWD_FILE,
+    username,
+  ]);
 
   console.log("[ACL] MQTT user removed:", username);
 }
@@ -113,12 +111,9 @@ topic read  devices/${deviceId}/ota
 `;
 }
 
-/**
- * Add ACL rules for device
- */
 async function addDeviceAcl(deviceId) {
-  if (!IS_PROD) {
-    console.log("[ACL][DEV] Skipping ACL add");
+  if (!ACL_ENABLED) {
+    console.log("[ACL] Skipped (ACL_ENABLED=false)");
     return;
   }
 
@@ -134,12 +129,9 @@ async function addDeviceAcl(deviceId) {
   await reloadMosquitto();
 }
 
-/**
- * Remove ACL rules for device
- */
 async function removeDeviceAcl(deviceId) {
-  if (!IS_PROD) {
-    console.log("[ACL][DEV] Skipping ACL remove");
+  if (!ACL_ENABLED) {
+    console.log("[ACL] Skipped (ACL_ENABLED=false)");
     return;
   }
 
@@ -148,7 +140,12 @@ async function removeDeviceAcl(deviceId) {
 
   const sedExpr = `/# DEVICE ${deviceId}/,/topic read  devices\\/${deviceId}\\/ota/d`;
 
-  await execSafe("sudo", ["sed", "-i", sedExpr, ACL_FILE]);
+  await execSafe("sudo", [
+    "sed",
+    "-i",
+    sedExpr,
+    ACL_FILE,
+  ]);
 
   console.log("[ACL] Device ACL removed:", deviceId);
 
@@ -160,7 +157,7 @@ async function removeDeviceAcl(deviceId) {
    ========================= */
 
 async function reloadMosquitto() {
-  if (!IS_PROD) return;
+  if (!ACL_ENABLED) return;
 
   await execSafe("sudo", ["systemctl", "reload", "mosquitto"]);
   console.log("[ACL] Mosquitto reloaded");
