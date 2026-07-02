@@ -33,14 +33,21 @@ function validateIdentifier(value, label) {
   }
 }
 
-function execSafe(command, args = []) {
+function execSafe(command, args = [], input = null) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, (err, stdout, stderr) => {
+    const child = execFile(command, args, (err, stdout, stderr) => {
       if (err) {
         return reject(stderr || err.message);
       }
       resolve(stdout);
     });
+
+    // Optionally feed data via stdin, so we can append an ACL block through
+    // `tee` instead of a shell (keeps the required sudo permission narrow).
+    if (input != null && child.stdin) {
+      child.stdin.write(input);
+      child.stdin.end();
+    }
   });
 }
 
@@ -109,15 +116,9 @@ async function addDeviceAcl(deviceId) {
 
   validateIdentifier(deviceId, "deviceId");
 
-  const aclBlock = buildDeviceAcl(deviceId)
-    .replace(/"/g, '\\"')
-    .replace(/\$/g, "\\$");
-
-  await execSafe("sudo", [
-    "bash",
-    "-c",
-    `echo "${aclBlock}" >> ${ACL_FILE}`,
-  ]);
+  // Append the ACL block via `sudo tee -a` (block passed on stdin) instead of a
+  // `sudo bash -c 'echo >>'` shell, so the sudo rule can be scoped to tee only.
+  await execSafe("sudo", ["tee", "-a", ACL_FILE], buildDeviceAcl(deviceId));
 
   console.log("[ACL] Device ACL added:", deviceId);
 

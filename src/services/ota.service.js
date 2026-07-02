@@ -36,16 +36,21 @@ exports.startOta = async (device) => {
   const latestVersion = await getProductionVersion();
   const firmwareUrl = await getSignedFirmwareUrl();
 
-  device.otaStatus = "IN_PROGRESS";
-  device.targetVersion = latestVersion; 
-  await device.save();
-
-  await OTA.create({
+  // Create the OTA history record first so we can link it to the device.
+  // Without this link the MQTT handler can't update the record's status,
+  // leaving it stuck at "STARTED".
+  const otaRecord = await OTA.create({
     deviceId: device.deviceId,
+    deviceRef: device._id,
     fromVersion: device.firmwareVersion,
     toVersion: latestVersion,
     status: "STARTED"
   });
+
+  device.otaStatus = "IN_PROGRESS";
+  device.targetVersion = latestVersion;
+  device.currentOtaId = otaRecord._id;
+  await device.save();
 
   mqtt.publish(
     `devices/${device.deviceId}/ota`,

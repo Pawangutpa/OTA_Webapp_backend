@@ -107,11 +107,18 @@ async function registerDevice(req, res, next) {
       blocked: false,
     });
 
-    // 2️⃣ Create MQTT user
-    await aclService.addMqttUser(`esp32_${normalizedId}`, normalizedId);
-
-    // 3️⃣ Add MQTT ACL
-    await aclService.addDeviceAcl(normalizedId);
+    // 2️⃣ Provision the device on the MQTT broker: create its user, add its
+    //     ACL, then reload Mosquitto so the new credentials work immediately
+    //     (addDeviceAcl calls reloadMosquitto internally).
+    //     Best-effort: a broker error must not undo a successful DB registration.
+    let brokerProvisioned = true;
+    try {
+      await aclService.addMqttUser(`esp32_${normalizedId}`, normalizedId);
+      await aclService.addDeviceAcl(normalizedId);
+    } catch (aclError) {
+      brokerProvisioned = false;
+      console.error("[DEVICE] Broker provisioning failed:", aclError);
+    }
 
     // 4️⃣ Log activity
     await Activity.create({
@@ -127,6 +134,7 @@ async function registerDevice(req, res, next) {
       success: true,
       message: "Device registered successfully",
       device,
+      brokerProvisioned,
     });
   } catch (error) {
     console.error("[DEVICE] Registration failed:", error);
