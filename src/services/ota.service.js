@@ -29,10 +29,6 @@ exports.startOta = async (device) => {
     throw new Error("Device offline");
   }
 
-  if (device.otaStatus === "IN_PROGRESS") {
-    throw new Error("OTA already running");
-  }
-
   const latestVersion = await getProductionVersion();
   const firmwareUrl = await getSignedFirmwareUrl();
 
@@ -50,6 +46,7 @@ exports.startOta = async (device) => {
   device.otaStatus = "IN_PROGRESS";
   device.targetVersion = latestVersion;
   device.currentOtaId = otaRecord._id;
+  device.otaStartedAt = new Date();
   await device.save();
 
   mqtt.publish(

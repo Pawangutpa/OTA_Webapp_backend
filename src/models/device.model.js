@@ -83,6 +83,11 @@ const DeviceSchema = new mongoose.Schema(
       ref: "OTA",
     },
 
+    // When the current OTA was started (used to detect a stuck IN_PROGRESS).
+    otaStartedAt: {
+      type: Date,
+    },
+
     /* =========================
        Health Metrics
        ========================= */

@@ -92,7 +92,24 @@ client.on("message", async (topic, message) => {
         return;
       }
 
-      if (health.fw) device.firmwareVersion = health.fw;
+      if (health.fw) {
+        device.firmwareVersion = health.fw;
+
+        // Self-heal a stuck OTA: if we still think an update is IN_PROGRESS but
+        // the device is sending health on a non-target version (after a short
+        // grace period), the OTA didn't complete (e.g. it rolled back) -> mark
+        // FAILED so it can be retried from the UI without waiting.
+        if (
+          device.otaStatus === "IN_PROGRESS" &&
+          device.targetVersion &&
+          health.fw !== device.targetVersion &&
+          device.otaStartedAt &&
+          Date.now() - new Date(device.otaStartedAt).getTime() > 60000
+        ) {
+          device.otaStatus = "FAILED";
+          console.log(`[MQTT] OTA for ${deviceId} did not complete -> FAILED`);
+        }
+      }
       if (health.heap !== undefined) device.lastHeap = health.heap;
       if (health.temp !== undefined) device.lastTemp = health.temp;
 

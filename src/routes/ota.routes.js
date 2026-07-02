@@ -30,4 +30,10 @@ router.get("/:deviceId/check", authMiddleware, otaController.checkOta);
  */
 router.post("/:deviceId/start", authMiddleware, otaController.startOta);
 
+/**
+ * Cancel / reset a stuck OTA (clears IN_PROGRESS)
+ * POST /api/ota/:deviceId/cancel
+ */
+router.post("/:deviceId/cancel", authMiddleware, otaController.cancelOta);
+
 module.exports = router;
