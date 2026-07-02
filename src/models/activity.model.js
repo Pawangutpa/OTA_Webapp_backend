@@ -31,6 +31,7 @@ const ActivitySchema = new mongoose.Schema(
       required: true,
       enum: [
         "DEVICE_REGISTERED",
+        "DEVICE_DELETED",
         "DEVICE_BLOCKED",
         "DEVICE_UNBLOCKED",
         "DEVICE_OFFLINE",

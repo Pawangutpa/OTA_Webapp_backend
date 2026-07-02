@@ -8,6 +8,7 @@
 
 const Device = require("../models/device.model");
 const Activity = require("../models/activity.model");
+const OTA = require("../models/ota.model");
 const aclService = require("../services/acl.service");
 const mqtt = require("../config/mqtt");
 
@@ -188,9 +189,68 @@ async function getDeviceById(req, res, next) {
   }
 }
 
+/**
+ * Delete a device (owner only).
+ * Removes the DB record + its OTA history, then the MQTT broker user + ACL and
+ * reloads Mosquitto (via acl.service, when ACL_ENABLED=true).
+ * DELETE /api/device/:deviceId
+ */
+async function deleteDevice(req, res, next) {
+  try {
+    const deviceId = req.params.deviceId.toUpperCase();
+
+    const device = await Device.findOne({
+      deviceId,
+      owner: req.user.id,
+    });
+
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: "Device not found",
+      });
+    }
+
+    // 1️⃣ Remove from database (device record + its OTA history)
+    await Device.deleteOne({ _id: device._id });
+    await OTA.deleteMany({ deviceId });
+
+    // 2️⃣ Remove the MQTT broker user + ACL, then reload Mosquitto.
+    //     Best-effort: broker cleanup failure must not fail the DB delete.
+    let brokerCleaned = true;
+    try {
+      await aclService.removeMqttUser(`esp32_${deviceId}`);
+      await aclService.removeDeviceAcl(deviceId); // also reloads mosquitto
+    } catch (aclError) {
+      brokerCleaned = false;
+      console.error("[DEVICE] Broker cleanup failed:", aclError);
+    }
+
+    // 3️⃣ Audit log
+    await Activity.create({
+      userId: req.user.id,
+      deviceId,
+      action: "DEVICE_DELETED",
+      ip: req.ip,
+    });
+
+    console.log("[DEVICE] Deleted:", deviceId);
+
+    return res.json({
+      success: true,
+      message: "Device deleted successfully",
+      brokerCleaned,
+    });
+  } catch (error) {
+    console.error("[DEVICE] Delete failed:", error);
+    next(error);
+  }
+}
+
 module.exports = {
   setLed,
   registerDevice,
   getMyDevices,
   getDeviceById,
+  deleteDevice,
 };

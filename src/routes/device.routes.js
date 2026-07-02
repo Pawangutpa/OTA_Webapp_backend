@@ -48,4 +48,10 @@ router.get("/:deviceId", authMiddleware, deviceController.getDeviceById);
  */
 router.post("/:deviceId/led", authMiddleware, deviceController.setLed);
 
+/**
+ * Delete a device (owner only)
+ * DELETE /api/device/:deviceId
+ */
+router.delete("/:deviceId", authMiddleware, deviceController.deleteDevice);
+
 module.exports = router;
